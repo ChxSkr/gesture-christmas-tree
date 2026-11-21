@@ -4,18 +4,65 @@
 
 ## 快速开始
 
-双击 `start.cmd`（自动起本地服务器并打开浏览器）。
+双击 `start.cmd`。它会自动起本地服务器、列出所有可访问地址并打开浏览器。
+
+```
+This machine   http://localhost:8777/index.html
+Same Wi-Fi     http://192.168.x.x:8777/index.html
+```
 
 或手动：
 
 ```bash
-python -m http.server 8777 --bind 127.0.0.1
-# 打开 http://localhost:8777/index.html
+python -m http.server 8777 --bind 0.0.0.0
+# 本机打开 http://localhost:8777/index.html
 ```
 
-> 摄像头只在 `https://` 或 `localhost` 下可用。直接双击 `index.html`（`file://`）时摄像头会失败，页面自动降级为动画模式。
+> 摄像头只在 `https://` 或 `localhost` 下可用。直接双击 `index.html`（`file://`）或通过局域网 http 地址打开时，摄像头会被浏览器拒绝，页面自动降级为动画模式并在底部给出提示。
 
 演示模式（无摄像头也能看效果）：`http://localhost:8777/index.html?demo=1`
+
+## 局域网访问
+
+服务器默认绑定 `0.0.0.0`，同一 Wi-Fi 下的手机、平板、其他电脑都能打开，但**摄像头能不能用分三种情况**：
+
+| 访问方式 | 画面 | 手势 | 原因 |
+|---|---|---|---|
+| `http://localhost:8777` | ✓ | ✓ | localhost 被视为安全上下文 |
+| `http://192.168.x.x:8777` | ✓ | ✗ | 内网 IP 不是安全上下文，浏览器**连权限弹窗都不给** |
+| 满足安全上下文的局域网地址 | ✓ | ✓ | 见下方三种做法 |
+
+`getUserMedia` 要求 "secure context"，判定标准是 **HTTPS + 受信任的证书链** 或 localhost。
+所以**自签名证书没用** —— 浏览器即使让你点"继续前往"，页面仍被标记为不安全，摄像头照样被拒。
+
+想让局域网设备用上手势，只有三条路：
+
+**1. Android Chrome 加白名单（最快，不用装任何东西）**
+
+手机 Chrome 打开 `chrome://flags/#unsafely-treat-insecure-origin-as-secure`，填入
+`http://192.168.x.x:8777`（换成你的实际地址），重启浏览器。该地址从此被当作安全上下文。
+
+**2. 隧道（最省心，iPhone 也能用）**
+
+```bash
+cloudflared tunnel --url http://localhost:8777
+# 或 npx localtunnel --port 8777
+```
+
+会得到一个 `https://xxx.trycloudflare.com` 地址，任何设备打开都是安全上下文，手势直接可用。代价是这个地址对公网可达。
+
+**3. 内网 CA（最正经，但要在手机上装根证书）**
+
+用 [mkcert](https://github.com/FiloSottile/mkcert) 在局域网 IP 上签证书：
+
+```bash
+mkcert -install                       # 本机装根 CA
+mkcert 192.168.1.5                    # 签证书
+```
+
+然后把 `mkcert -CAROOT` 里的 `rootCA.pem` 传到手机安装并信任（Android 需在"加密与凭据 → 安装证书 → CA 证书"；iOS 还要在"关于本机 → 证书信任设置"里手动打开）。之后用 `https://192.168.1.5` 访问即可。
+
+iPhone 的 Safari 没有 flag 可用，只能用第 2 或第 3 条。
 
 ## 手势映射
 

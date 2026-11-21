@@ -216,6 +216,22 @@
     to   { transform: scale(2.4); opacity: 0; }
   }
 
+  #insecureTip {
+    position: absolute; left: 50%; bottom: 54px;
+    transform: translateX(-50%);
+    max-width: 78vw; padding: 7px 14px;
+    border-radius: 9px;
+    font-size: 11.5px; line-height: 1.65; letter-spacing: .02em;
+    text-align: center;
+    background: rgba(72, 44, 8, 0.82);
+    border: 1px solid rgba(255, 190, 90, 0.34);
+    color: rgba(255, 214, 150, 0.95);
+    opacity: 0; pointer-events: none;
+    transition: opacity .4s;
+  }
+  #insecureTip.show { opacity: 1; }
+  body.clean #insecureTip { opacity: 0; }
+
   #boot {
     position: absolute; inset: 0; display: flex;
     align-items: center; justify-content: center; flex-direction: column;
@@ -256,6 +272,11 @@
 </div>
 
 <div id="hint">拇指与食指捏合后左右拖动 · 松手甩出 · 张开 / 握拳改树冠 · 双手拉开推进 · 按 H 隐藏界面</div>
+
+<div id="insecureTip">
+  当前是局域网 http 地址，浏览器禁止调用摄像头 —— 只能看动画。<br>
+  需要手势：本机用 localhost 打开，或按 README「局域网访问」配置。
+</div>
 
 <button id="gear" aria-label="参数调节" title="参数调节（P）">
   <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor"
@@ -928,6 +949,15 @@ async function initHand() {
 }
 
 async function initCamera() {
+  // 非安全上下文（如 http://192.168.x.x）下浏览器直接封掉摄像头，
+  // 连权限弹窗都不会出现，这里提前拦下来给出明确提示
+  if (!window.isSecureContext) {
+    throw new Error('insecure context');
+  }
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+    throw new Error('mediaDevices unavailable');
+  }
+
   // 用户不回应授权弹窗时 getUserMedia 会一直挂起，加超时兜底
   const stream = await Promise.race([
     navigator.mediaDevices.getUserMedia({
@@ -1557,15 +1587,26 @@ syncTuner();
 applyCounts();
 
 (async () => {
+  const insecure = !window.isSecureContext;
+  if (insecure) {
+    // 非安全上下文下摄像头必被拒，顺带跳过 28MB 模型下载，页面秒开
+    document.getElementById('insecureTip').classList.add('show');
+  }
+
   try {
+    if (insecure) throw new Error('insecure context');
     await initHand();
     statusEl.textContent = '手势模型就绪 · 正在请求摄像头…';
     await initCamera();
   } catch (e) {
     console.warn('[init]', e);
-    statusEl.textContent = HandLandmarker
-      ? '摄像头不可用 · 已切换到自动动画'
-      : '手势模块不可用 · 已切换到自动动画';
+    if (insecure) {
+      statusEl.textContent = '局域网 http · 摄像头被禁用';
+    } else if (!HandLandmarker) {
+      statusEl.textContent = '手势模块不可用 · 自动动画';
+    } else {
+      statusEl.textContent = '摄像头不可用 · 自动动画';
+    }
     camBox.classList.remove('on');
   }
 })();

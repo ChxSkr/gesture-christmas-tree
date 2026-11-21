@@ -1247,7 +1247,7 @@ function tick() {
     raw.open  = 0.58 + Math.sin(t * 0.75) * 0.20;
     raw.pinch = 0.30 + Math.sin(t * 1.55) * 0.28;
     raw.cx = 0.5; raw.cy = 0.5; raw.two = 0;
-    autoRot += dt * 0.22;
+    // 自转统一交给下方「静置 1 秒后」的分支，避免重复累加成双倍速
   }
 
   // ---- 平滑 + 死区
@@ -1311,7 +1311,11 @@ function tick() {
 
   lightPts.material.uniforms.uTime.value   = t * (1.0 + open * 0.9 + spinAbs * 0.25);
   lightPts.material.uniforms.uOpen.value   = open;
-  lightPts.material.uniforms.uBright.value = CONFIG.lightBright + open * 0.45 + spinAbs * 0.12;
+  // 彩灯亮度：旋转加成收敛，并压一个硬上限，避免捏合快转时一片白
+  lightPts.material.uniforms.uBright.value = Math.min(
+    CONFIG.lightBright + open * 0.32 + spinAbs * 0.035,
+    1.25
+  );
   lightPts.material.uniforms.uTwist.value  = twist;
 
   snowPts.material.uniforms.uTime.value  = t;

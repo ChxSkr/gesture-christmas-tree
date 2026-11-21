@@ -95,6 +95,115 @@
     transition: opacity .6s;
   }
 
+  #gear {
+    position: absolute; top: 22px; right: 22px;
+    width: 38px; height: 38px; border-radius: 11px;
+    display: flex; align-items: center; justify-content: center;
+    background: rgba(9, 15, 26, 0.55);
+    border: 1px solid rgba(120, 200, 255, 0.16);
+    color: rgba(170, 205, 245, 0.75);
+    cursor: pointer; z-index: 15;
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    transition: color .2s, border-color .2s, background .2s;
+  }
+  #gear:hover, #gear.active {
+    color: #7df5c6;
+    border-color: rgba(80, 240, 180, 0.4);
+    background: rgba(14, 30, 34, 0.7);
+  }
+
+  #tuner {
+    position: absolute; top: 22px; right: 22px;
+    width: 292px; max-height: calc(100% - 44px);
+    display: flex; flex-direction: column;
+    background: rgba(8, 13, 22, 0.86);
+    border: 1px solid rgba(120, 200, 255, 0.16);
+    border-radius: 16px;
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    z-index: 16;
+    transform: translateX(calc(100% + 40px));
+    opacity: 0;
+    transition: transform .32s cubic-bezier(.22,.8,.3,1), opacity .28s;
+    pointer-events: none;
+  }
+  #tuner.open { transform: translateX(0); opacity: 1; pointer-events: auto; }
+
+  #tuner header {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 14px 16px 10px;
+    border-bottom: 1px solid rgba(120, 200, 255, 0.1);
+    font-size: 13px; letter-spacing: .08em;
+    color: #eaf4ff;
+  }
+  #tuner header button {
+    width: 24px; height: 24px; border-radius: 7px;
+    background: transparent; border: none; cursor: pointer;
+    color: rgba(170, 205, 245, 0.6); font-size: 17px; line-height: 1;
+    transition: color .2s, background .2s;
+  }
+  #tuner header button:hover { color: #fff; background: rgba(120, 200, 255, 0.12); }
+
+  .tuner-body { padding: 6px 16px 12px; overflow-y: auto; }
+  .tuner-body::-webkit-scrollbar { width: 5px; }
+  .tuner-body::-webkit-scrollbar-thumb {
+    background: rgba(120, 200, 255, 0.2); border-radius: 3px;
+  }
+
+  .grp {
+    margin: 14px 0 2px;
+    font-size: 10.5px; letter-spacing: .18em;
+    color: rgba(110, 240, 190, 0.65);
+    text-transform: uppercase;
+  }
+
+  .row {
+    display: grid; grid-template-columns: 1fr auto; align-items: center;
+    gap: 3px 8px; padding: 6px 0;
+  }
+  .row label { font-size: 12px; color: rgba(178, 208, 245, 0.88); }
+  .row output {
+    font-size: 11.5px; font-variant-numeric: tabular-nums;
+    color: rgba(125, 245, 198, 0.9);
+  }
+  .row input[type="range"] {
+    grid-column: 1 / -1;
+    width: 100%; height: 3px; margin: 4px 0 0;
+    -webkit-appearance: none; appearance: none;
+    background: rgba(120, 200, 255, 0.16);
+    border-radius: 2px; outline: none; cursor: pointer;
+  }
+  .row input[type="range"]::-webkit-slider-thumb {
+    -webkit-appearance: none; appearance: none;
+    width: 13px; height: 13px; border-radius: 50%;
+    background: #45f5b4;
+    border: 2px solid #08121a;
+    box-shadow: 0 0 0 1px rgba(69, 245, 180, 0.45);
+    cursor: pointer;
+  }
+  .row input[type="range"]::-moz-range-thumb {
+    width: 11px; height: 11px; border-radius: 50%;
+    background: #45f5b4; border: 2px solid #08121a; cursor: pointer;
+  }
+
+  #tuner footer {
+    padding: 10px 16px 14px;
+    border-top: 1px solid rgba(120, 200, 255, 0.1);
+  }
+  #resetCfg {
+    width: 100%; padding: 8px;
+    font-size: 12px; letter-spacing: .06em;
+    color: rgba(178, 208, 245, 0.85);
+    background: rgba(120, 200, 255, 0.07);
+    border: 1px solid rgba(120, 200, 255, 0.16);
+    border-radius: 9px; cursor: pointer;
+    transition: background .2s, color .2s;
+  }
+  #resetCfg:hover { background: rgba(120, 200, 255, 0.14); color: #fff; }
+
+  body.clean #gear, body.clean #tuner { opacity: 0; pointer-events: none; }
+
   #boot {
     position: absolute; inset: 0; display: flex;
     align-items: center; justify-content: center; flex-direction: column;
@@ -135,6 +244,66 @@
 </div>
 
 <div id="hint">拇指与食指捏合后左右拖动 · 松手甩出 · 张开 / 握拳改树冠 · 双手拉开推进 · 按 H 隐藏界面</div>
+
+<button id="gear" aria-label="参数调节" title="参数调节（P）">
+  <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor"
+       stroke-width="1.6" stroke-linecap="round">
+    <circle cx="12" cy="12" r="3.1"/>
+    <path d="M12 2.8v2.6M12 18.6v2.6M2.8 12h2.6M18.6 12h2.6M5.5 5.5l1.8 1.8M16.7 16.7l1.8 1.8M18.5 5.5l-1.8 1.8M7.3 16.7l-1.8 1.8"/>
+  </svg>
+</button>
+
+<aside id="tuner">
+  <header><span>参数调节</span><button id="tunerClose" aria-label="收起">×</button></header>
+  <div class="tuner-body">
+    <p class="grp">手势</p>
+    <div class="row" data-key="rotPerScreen">
+      <label>旋转灵敏度</label><output></output>
+      <input type="range" min="0.4" max="3" step="0.1">
+    </div>
+    <div class="row" data-key="grabOn">
+      <label>捏合抓取阈值</label><output></output>
+      <input type="range" min="0.55" max="0.92" step="0.01">
+    </div>
+    <div class="row" data-key="inertia">
+      <label>松手惯性</label><output></output>
+      <input type="range" min="0.86" max="0.99" step="0.005">
+    </div>
+
+    <p class="grp">动画</p>
+    <div class="row" data-key="autoSpeed">
+      <label>自动旋转速度</label><output></output>
+      <input type="range" min="0" max="0.6" step="0.02">
+    </div>
+    <div class="row" data-key="autoDelay">
+      <label>恢复自转延迟</label><output></output>
+      <input type="range" min="200" max="3000" step="100">
+    </div>
+    <div class="row" data-key="twist">
+      <label>扭转强度</label><output></output>
+      <input type="range" min="0" max="0.3" step="0.01">
+    </div>
+
+    <p class="grp">视觉</p>
+    <div class="row" data-key="treeCount">
+      <label>树体粒子</label><output></output>
+      <input type="range" min="2000" max="9000" step="200">
+    </div>
+    <div class="row" data-key="lightBright">
+      <label>彩灯亮度</label><output></output>
+      <input type="range" min="0.5" max="1.8" step="0.05">
+    </div>
+    <div class="row" data-key="snowCount">
+      <label>雪花数量</label><output></output>
+      <input type="range" min="300" max="2200" step="100">
+    </div>
+    <div class="row" data-key="snowSpeed">
+      <label>雪花速度</label><output></output>
+      <input type="range" min="0.2" max="2.5" step="0.1">
+    </div>
+  </div>
+  <footer><button id="resetCfg">恢复默认</button></footer>
+</aside>
 
 <div id="boot"><div class="ring"></div><span>INITIALIZING</span></div>
 
@@ -271,6 +440,9 @@ function buildTree() {
   const tmp  = new THREE.Color();
 
   const TURNS = 7;
+  // 位置仍按螺旋连续生成（保住层次感），但写入时用互质步长打乱下标，
+  // 这样调粒子数时截断 drawRange 得到的是均匀子集，不会只剩底部
+  const STRIDE = 7919;
 
   for (let i = 0; i < N; i++) {
     const u = i / N;
@@ -289,9 +461,11 @@ function buildTree() {
       ? h * TURNS * Math.PI * 2 + (Math.random() - 0.5) * 0.62
       : Math.random() * Math.PI * 2;
 
-    pos[i * 3]     = Math.cos(theta) * r;
-    pos[i * 3 + 1] = BASE_Y + h * TREE_H;
-    pos[i * 3 + 2] = Math.sin(theta) * r;
+    const s = (i * STRIDE) % N;
+
+    pos[s * 3]     = Math.cos(theta) * r;
+    pos[s * 3 + 1] = BASE_Y + h * TREE_H;
+    pos[s * 3 + 2] = Math.sin(theta) * r;
 
     if (h < 0.55) tmp.copy(cLow).lerp(cMid, h / 0.55);
     else          tmp.copy(cMid).lerp(cTop, (h - 0.55) / 0.45);
@@ -300,12 +474,12 @@ function buildTree() {
     const spark = Math.random();
     if (spark < 0.012) tmp.set(spark < 0.005 ? '#ffd166' : '#66e0ff');
 
-    col[i * 3]     = tmp.r;
-    col[i * 3 + 1] = tmp.g;
-    col[i * 3 + 2] = tmp.b;
+    col[s * 3]     = tmp.r;
+    col[s * 3 + 1] = tmp.g;
+    col[s * 3 + 2] = tmp.b;
 
-    size[i]  = 0.85 + Math.random() * 1.05;
-    phase[i] = Math.random() * Math.PI * 2;
+    size[s]  = 0.85 + Math.random() * 1.05;
+    phase[s] = Math.random() * Math.PI * 2;
   }
 
   const geo = new THREE.BufferGeometry();
@@ -332,21 +506,24 @@ function buildLights() {
   const tmp = new THREE.Color();
 
   for (let i = 0; i < N; i++) {
-    const h = i / N * 0.97;
+    // 沿螺旋连续生成，写入下标打乱（同树体，支持 drawRange 截断）
+    const h = (i / N) * 0.97;
     const radius = TREE_R * Math.pow(1 - h, 0.78) * 1.04;
     const theta = h * 7 * Math.PI * 2 + (Math.random() - 0.5) * 0.3;
 
-    pos[i * 3]     = Math.cos(theta) * radius;
-    pos[i * 3 + 1] = BASE_Y + h * TREE_H;
-    pos[i * 3 + 2] = Math.sin(theta) * radius;
+    const s = (i * 179) % N;
+
+    pos[s * 3]     = Math.cos(theta) * radius;
+    pos[s * 3 + 1] = BASE_Y + h * TREE_H;
+    pos[s * 3 + 2] = Math.sin(theta) * radius;
 
     tmp.set(palette[(Math.random() * palette.length) | 0]);
-    col[i * 3]     = tmp.r;
-    col[i * 3 + 1] = tmp.g;
-    col[i * 3 + 2] = tmp.b;
+    col[s * 3]     = tmp.r;
+    col[s * 3 + 1] = tmp.g;
+    col[s * 3 + 2] = tmp.b;
 
-    size[i]  = 1.5 + Math.random() * 1.9;
-    phase[i] = Math.random() * Math.PI * 2;
+    size[s]  = 1.5 + Math.random() * 1.9;
+    phase[s] = Math.random() * Math.PI * 2;
   }
 
   const geo = new THREE.BufferGeometry();
@@ -612,10 +789,30 @@ let grabTravel = 0;
 let grabTargetRot = 0;
 let grabVel = 0;
 
-const AUTO_DELAY = 1000;
-const GRAB_ON = 0.78;          // 捏合超过此值算"抓住"
-const GRAB_OFF = 0.55;         // 低于此值算"松手"（迟滞防抖）
-const ROT_PER_SCREEN = Math.PI * 2;   // 手横扫一个画面宽度 = 树转一圈
+/* ---------------- 可调参数（侧边面板实时生效） ---------------- */
+const DEFAULTS = {
+  rotPerScreen: 1.0,    // 手横扫一屏 = 树转几圈
+  grabOn: 0.78,         // 捏合抓取阈值
+  inertia: 0.94,        // 松手惯性（每 1/60 秒的衰减系数）
+  autoSpeed: 0.22,      // 自动旋转角速度 rad/s
+  autoDelay: 1000,      // 停手后多久恢复自转 ms
+  twist: 0.10,          // 扭转强度
+  treeCount: 9000,      // 树体粒子数
+  lightBright: 0.85,    // 彩灯亮度基准
+  snowCount: 2200,      // 雪花数量
+  snowSpeed: 1.0        // 雪花下落速度
+};
+
+const CONFIG = Object.assign({}, DEFAULTS);
+
+try {
+  const saved = JSON.parse(localStorage.getItem('gct.config') || '{}');
+  for (const k in CONFIG) {
+    if (typeof saved[k] === 'number' && isFinite(saved[k])) CONFIG[k] = saved[k];
+  }
+} catch (e) { /* 忽略损坏的本地配置 */ }
+
+const GRAB_HYST = 0.23;   // 抓取/松手的双阈值差
 
 /* ------------------------------------------------------------------ *
  *  3. 手势识别
@@ -911,22 +1108,25 @@ function onResults(res) {
   const dcx = prevCx === null ? 0 : raw.cx - prevCx;
 
   // 捏合抓取：迟滞判断，抓住后把手的水平位移换算成旋转角
-  if (!grabbing && a.pinch > GRAB_ON) {
+  const rotK = CONFIG.rotPerScreen * Math.PI;
+  const grabOff = CONFIG.grabOn - GRAB_HYST;
+
+  if (!grabbing && a.pinch > CONFIG.grabOn) {
     grabbing = true;
     grabBaseRot = treeGroup.rotation.y;
     grabTravel = 0;
     grabTargetRot = grabBaseRot;
     grabVel = 0;
-  } else if (grabbing && a.pinch < GRAB_OFF) {
+  } else if (grabbing && a.pinch < grabOff) {
     grabbing = false;
     spinVel = grabVel;
   }
 
   if (grabbing) {
     grabTravel += dcx;
-    grabTargetRot = grabBaseRot + grabTravel * ROT_PER_SCREEN;
+    grabTargetRot = grabBaseRot + grabTravel * rotK;
     if (dts > 0.001 && dts < 0.4) {
-      grabVel = clamp((dcx / dts) * ROT_PER_SCREEN, -5, 5);
+      grabVel = clamp((dcx / dts) * rotK, -5, 5);
     } else {
       grabVel *= 0.5;
     }
@@ -975,6 +1175,7 @@ canvas.style.cursor = 'grab';
 
 window.addEventListener('keydown', e => {
   if (e.key === 'h' || e.key === 'H') document.body.classList.toggle('clean');
+  if (e.key === 'p' || e.key === 'P') toggleTuner();
   if (e.key === 'd' || e.key === 'D') {
     demo = !demo;
     statusEl.textContent = demo ? '演示模式 · 虚拟手势' : '等待手势…';
@@ -1004,22 +1205,24 @@ function tick() {
 
     // 虚拟手同样走捏合抓取：捏住时左右拖动，松开后甩出惯性
     const dcx = prevCx === null ? 0 : raw.cx - prevCx;
+    const rotK = CONFIG.rotPerScreen * Math.PI;
+    const grabOff = CONFIG.grabOn - GRAB_HYST;
 
-    if (!grabbing && raw.pinch > GRAB_ON) {
+    if (!grabbing && raw.pinch > CONFIG.grabOn) {
       grabbing = true;
       grabBaseRot = treeGroup.rotation.y;
       grabTravel = 0;
       grabTargetRot = grabBaseRot;
       grabVel = 0;
-    } else if (grabbing && raw.pinch < GRAB_OFF) {
+    } else if (grabbing && raw.pinch < grabOff) {
       grabbing = false;
       spinVel = grabVel;
     }
 
     if (grabbing) {
       grabTravel += dcx;
-      grabTargetRot = grabBaseRot + grabTravel * ROT_PER_SCREEN;
-      grabVel = clamp((dcx / Math.max(dt, 0.001)) * ROT_PER_SCREEN, -5, 5);
+      grabTargetRot = grabBaseRot + grabTravel * rotK;
+      grabVel = clamp((dcx / Math.max(dt, 0.001)) * rotK, -5, 5);
     }
 
     prevCx = raw.cx;
@@ -1065,7 +1268,7 @@ function tick() {
     lastManual = nowMs;
   } else {
     // 松手后靠惯性滑行（衰减按 dt 归一，帧率无关）
-    spinVel *= Math.pow(0.94, dt * 60);
+    spinVel *= Math.pow(CONFIG.inertia, dt * 60);
     treeGroup.rotation.y += spinVel * dt + mouseRot;
   }
   mouseRot = 0;
@@ -1079,8 +1282,8 @@ function tick() {
   treeGroup.rotation.z += (tiltTarget - treeGroup.rotation.z) * 0.07;
 
   // 手动旋转结束后静置 1 秒，再恢复自动旋转
-  if (nowMs - lastManual > AUTO_DELAY) {
-    autoRot += dt * 0.22;
+  if (nowMs - lastManual > CONFIG.autoDelay) {
+    autoRot += dt * CONFIG.autoSpeed;
     let diff = autoRot - treeGroup.rotation.y;
     diff = ((diff + Math.PI) % (Math.PI * 2) + Math.PI * 2) % (Math.PI * 2) - Math.PI;
     treeGroup.rotation.y += diff * 0.06;
@@ -1099,7 +1302,7 @@ function tick() {
   const bright = 0.95;
 
   const spinAbs = Math.abs(rotRate);
-  const twist = clamp(-rotRate * 0.10, -0.55, 0.55);
+  const twist = clamp(-rotRate * CONFIG.twist, -0.55, 0.55);
 
   treePts.material.uniforms.uTime.value   = t;
   treePts.material.uniforms.uOpen.value   = open;
@@ -1108,11 +1311,11 @@ function tick() {
 
   lightPts.material.uniforms.uTime.value   = t * (1.0 + open * 0.9 + spinAbs * 0.25);
   lightPts.material.uniforms.uOpen.value   = open;
-  lightPts.material.uniforms.uBright.value = 0.85 + open * 0.45 + spinAbs * 0.12;
+  lightPts.material.uniforms.uBright.value = CONFIG.lightBright + open * 0.45 + spinAbs * 0.12;
   lightPts.material.uniforms.uTwist.value  = twist;
 
   snowPts.material.uniforms.uTime.value  = t;
-  snowPts.material.uniforms.uSpeed.value = 1.0;
+  snowPts.material.uniforms.uSpeed.value = CONFIG.snowSpeed;
   snowPts.material.uniforms.uWind.value  = clamp(rotRate * 0.16, -1.0, 1.0);
 
   // 顶星随张开度呼吸
@@ -1173,6 +1376,73 @@ window.addEventListener('resize', () => {
  *  6. 启动
  * ------------------------------------------------------------------ */
 renderer.setAnimationLoop(tick);
+
+/* ------------------------------------------------------------------ *
+ *  6. 参数面板
+ * ------------------------------------------------------------------ */
+const tunerEl = document.getElementById('tuner');
+const gearEl  = document.getElementById('gear');
+
+const FMT = {
+  rotPerScreen: v => v.toFixed(1) + ' 圈',
+  grabOn:       v => v.toFixed(2),
+  inertia:      v => Math.round(v * 100) + '%',
+  autoSpeed:    v => v.toFixed(2),
+  autoDelay:    v => (v / 1000).toFixed(1) + ' 秒',
+  twist:        v => v.toFixed(2),
+  treeCount:    v => Math.round(v).toLocaleString('en-US'),
+  lightBright:  v => v.toFixed(2),
+  snowCount:    v => Math.round(v).toLocaleString('en-US'),
+  snowSpeed:    v => v.toFixed(1) + '×'
+};
+
+// 粒子数量用 drawRange 截断，不重建几何体
+function applyCounts() {
+  treePts.geometry.setDrawRange(0, Math.round(CONFIG.treeCount));
+  snowPts.geometry.setDrawRange(0, Math.round(CONFIG.snowCount));
+}
+
+function saveConfig() {
+  try { localStorage.setItem('gct.config', JSON.stringify(CONFIG)); } catch (e) {}
+}
+
+function syncTuner() {
+  tunerEl.querySelectorAll('.row').forEach((row) => {
+    const k = row.dataset.key;
+    row.querySelector('input').value = CONFIG[k];
+    row.querySelector('output').textContent = FMT[k](CONFIG[k]);
+  });
+}
+
+tunerEl.querySelectorAll('.row').forEach((row) => {
+  const k = row.dataset.key;
+  const input = row.querySelector('input');
+  const out = row.querySelector('output');
+  input.addEventListener('input', () => {
+    CONFIG[k] = parseFloat(input.value);
+    out.textContent = FMT[k](CONFIG[k]);
+    if (k === 'treeCount' || k === 'snowCount') applyCounts();
+    saveConfig();
+  });
+});
+
+function toggleTuner(force) {
+  const open = force === undefined ? !tunerEl.classList.contains('open') : force;
+  tunerEl.classList.toggle('open', open);
+  gearEl.classList.toggle('active', open);
+}
+
+gearEl.addEventListener('click', () => toggleTuner());
+document.getElementById('tunerClose').addEventListener('click', () => toggleTuner(false));
+document.getElementById('resetCfg').addEventListener('click', () => {
+  Object.assign(CONFIG, DEFAULTS);
+  syncTuner();
+  applyCounts();
+  saveConfig();
+});
+
+syncTuner();
+applyCounts();
 
 (async () => {
   try {

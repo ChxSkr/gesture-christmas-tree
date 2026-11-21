@@ -1,0 +1,1192 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
+<title>手势圣诞树 · Gesture Christmas Tree</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { width: 100%; height: 100%; overflow: hidden; }
+  body {
+    background: radial-gradient(ellipse at 50% 36%, #10203a 0%, #070d18 46%, #03050a 100%);
+    font-family: -apple-system, "Segoe UI", "Microsoft YaHei", sans-serif;
+    color: #dfe9ff;
+    -webkit-font-smoothing: antialiased;
+  }
+  #stage { position: absolute; inset: 0; display: block; }
+
+  #handLayer {
+    position: absolute; inset: 0; display: block;
+    pointer-events: none;
+    transition: opacity .35s;
+  }
+  body.clean #handLayer { opacity: 0; }
+
+  #panel {
+    position: absolute; top: 22px; left: 22px; width: 224px;
+    padding: 16px 18px 14px;
+    background: rgba(9, 15, 26, 0.62);
+    border: 1px solid rgba(120, 200, 255, 0.16);
+    border-radius: 14px;
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    transition: opacity .3s;
+  }
+  #panel h1 {
+    font-size: 15px; font-weight: 500; letter-spacing: .06em;
+    color: #ffffff;
+  }
+  #panel .sub {
+    margin-top: 5px; font-size: 11.5px; line-height: 1.5;
+    color: rgba(178, 208, 245, 0.9);
+  }
+  .meter { display: flex; align-items: center; gap: 9px; margin-top: 11px; }
+  .meter span {
+    font-size: 11px; color: rgba(178, 208, 245, 0.8);
+    width: 28px; flex: none;
+  }
+  .bar {
+    flex: 1; height: 3px; border-radius: 2px;
+    background: rgba(120, 200, 255, 0.11); overflow: hidden;
+  }
+  .bar i {
+    display: block; height: 100%; width: 0%;
+    background: linear-gradient(90deg, #17b47f, #45f5b4);
+    border-radius: 2px;
+    transition: width .08s linear;
+  }
+  #b-pinch { background: linear-gradient(90deg, #c8952a, #ffd166); }
+  #b-two   { background: linear-gradient(90deg, #2a7ec8, #55c8ff); }
+
+  #camWrap {
+    position: absolute; right: 22px; bottom: 58px; width: 300px;
+    opacity: 0; transition: opacity .5s;
+  }
+  #camWrap.on { opacity: .88; }
+  #cam {
+    position: relative;
+    width: 300px; height: 225px;
+    border-radius: 12px; overflow: hidden;
+    border: 1px solid rgba(120, 200, 255, 0.2);
+    background: #060a12;
+    transform: scaleX(-1);
+  }
+  #cam video { width: 100%; height: 100%; object-fit: cover; display: block; }
+  #cam canvas { position: absolute; inset: 0; width: 100%; height: 100%; }
+  #camTag {
+    margin-top: 8px; display: flex; justify-content: space-between;
+    font-size: 10px; letter-spacing: .13em;
+    color: rgba(110, 240, 190, 0.8);
+  }
+  #spin {
+    position: relative; height: 3px; margin-top: 7px; border-radius: 2px;
+    background: rgba(120, 200, 255, 0.13); overflow: hidden;
+  }
+  #spin i {
+    position: absolute; top: 0; bottom: 0; left: 50%; width: 3%;
+    background: rgba(70, 240, 180, 0.85); border-radius: 2px;
+  }
+
+  #hint {
+    position: absolute; left: 50%; bottom: 26px; transform: translateX(-50%);
+    font-size: 12px; letter-spacing: .04em;
+    color: rgba(150, 180, 220, 0.42);
+    white-space: nowrap;
+    transition: opacity .6s;
+  }
+
+  #boot {
+    position: absolute; inset: 0; display: flex;
+    align-items: center; justify-content: center; flex-direction: column;
+    gap: 14px; background: #03050a; z-index: 20;
+    transition: opacity .7s, visibility 0s .7s; font-size: 12.5px;
+    color: rgba(150, 190, 230, 0.65); letter-spacing: .1em;
+  }
+  #boot.gone { opacity: 0; visibility: hidden; pointer-events: none; }
+  #boot .ring {
+    width: 26px; height: 26px; border-radius: 50%;
+    border: 1.5px solid rgba(80, 220, 170, 0.18);
+    border-top-color: #45f5b4;
+    animation: spin .9s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  body.clean #panel, body.clean #camWrap, body.clean #hint { opacity: 0; }
+</style>
+</head>
+<body>
+<canvas id="stage"></canvas>
+<canvas id="handLayer"></canvas>
+
+<div id="panel">
+  <h1>手势圣诞树</h1>
+  <p class="sub" id="status">正在加载手势模型…</p>
+  <div class="meter"><span>张开</span><div class="bar"><i id="b-open"></i></div></div>
+  <div class="meter"><span>捏合</span><div class="bar"><i id="b-pinch"></i></div></div>
+  <div class="meter"><span>双手</span><div class="bar"><i id="b-two"></i></div></div>
+</div>
+
+<div id="camWrap">
+  <div id="cam">
+    <video id="video" playsinline autoplay muted></video>
+    <canvas id="overlay" width="600" height="450"></canvas>
+  </div>
+  <div id="camTag"><span id="camLabel">HAND TRACKING</span><span id="camHint">—</span></div>
+  <div id="spin"><i id="spinDot"></i></div>
+</div>
+
+<div id="hint">拇指与食指捏合后左右拖动 · 松手甩出 · 张开 / 握拳改树冠 · 双手拉开推进 · 按 H 隐藏界面</div>
+
+<div id="boot"><div class="ring"></div><span>INITIALIZING</span></div>
+
+<script>
+  // 兜底：若模块脚本整体加载失败（资源 404 / WebGL 不可用），不让它永久转圈
+  window.setTimeout(function () {
+    var b = document.getElementById('boot');
+    if (!b || b.classList.contains('gone')) return;
+    b.innerHTML =
+      '<div style="text-align:center">' +
+      '<div style="color:#ffb0b0;font-size:13px;letter-spacing:.04em">资源加载失败</div>' +
+      '<div style="margin-top:9px;font-size:11.5px;line-height:1.9;color:rgba(170,200,240,.65)">' +
+      '当前地址不提供 .mjs / .task 依赖文件<br>' +
+      '请双击 start.cmd，用 localhost 打开' +
+      '</div></div>';
+  }, 6000);
+</script>
+
+<script type="module">
+import * as THREE from './vendor/three.module.js';
+
+// 手势模块按需动态加载：某些托管环境不提供 .mjs / .task，
+// 加载失败时降级为自动动画，不能让整段脚本挂掉。
+let FilesetResolver = null;
+let HandLandmarker = null;
+
+const clamp = (v, a, b) => (v < a ? a : v > b ? b : v);
+const lerp = (a, b, t) => a + (b - a) * t;
+
+/* ------------------------------------------------------------------ *
+ *  1. 场景
+ * ------------------------------------------------------------------ */
+const TREE_H = 4.3;
+const TREE_R = 1.78;
+const BASE_Y = -1.95;
+const TOP_Y = BASE_Y + TREE_H;
+
+const canvas = document.getElementById('stage');
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+renderer.setSize(window.innerWidth, window.innerHeight);
+renderer.setClearColor(0x000000, 0);
+
+const PR = renderer.getPixelRatio();
+
+const scene = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(46, window.innerWidth / window.innerHeight, 0.1, 120);
+camera.position.set(0, 0.85, 8.9);
+camera.lookAt(0, 0.1, 0);
+
+const treeGroup = new THREE.Group();
+scene.add(treeGroup);
+
+/* --- 通用发光点着色器 ---------------------------------------------- */
+const particleVert = /* glsl */`
+  uniform float uTime;
+  uniform float uOpen;
+  uniform float uBright;
+  uniform float uPixelRatio;
+  uniform float uTwist;
+  attribute float aSize;
+  attribute float aPhase;
+  attribute vec3  aColor;
+  varying vec3  vColor;
+  varying float vGlow;
+
+  void main() {
+    vec3 p = position;
+
+    float h = clamp((p.y - (${BASE_Y.toFixed(2)})) / ${TREE_H.toFixed(2)}, 0.0, 1.0);
+
+    float spread = mix(0.80, 1.0, uOpen);
+    float flare  = 1.0 + (1.0 - h) * (uOpen - 0.5) * 0.42;
+    p.xz *= spread * flare;
+    p.y  += (uOpen - 0.5) * (1.0 - h) * 0.10;
+
+    // 甩动时把树"拧"一下：越高扭转越多，螺旋线被拧紧/拧松
+    float tw = uTwist * h;
+    float tc = cos(tw), ts = sin(tw);
+    p.xz = mat2(tc, -ts, ts, tc) * p.xz;
+
+    vec4 mv = modelViewMatrix * vec4(p, 1.0);
+    gl_Position = projectionMatrix * mv;
+
+    float twinkle = 0.72 + 0.42 * sin(uTime * 2.1 + aPhase);
+    gl_PointSize = aSize * twinkle * uBright * (62.0 / max(-mv.z, 0.001)) * uPixelRatio;
+
+    vColor = aColor;
+    vGlow  = twinkle * uBright;
+  }
+`;
+
+const particleFrag = /* glsl */`
+  varying vec3  vColor;
+  varying float vGlow;
+  void main() {
+    vec2 uv = gl_PointCoord - 0.5;
+    float d = length(uv);
+    if (d > 0.5) discard;
+    float a = pow(smoothstep(0.5, 0.0, d), 1.6);
+    gl_FragColor = vec4(vColor * vGlow * a * 0.58, 1.0);
+  }
+`;
+
+function makeMaterial(open = 0.6, bright = 1.0) {
+  return new THREE.ShaderMaterial({
+    uniforms: {
+      uTime:   { value: 0 },
+      uOpen:   { value: open },
+      uBright: { value: bright },
+      uTwist:  { value: 0 },
+      uPixelRatio: { value: PR }
+    },
+    vertexShader: particleVert,
+    fragmentShader: particleFrag,
+    transparent: true,
+    depthTest: false,
+    depthWrite: false,
+    blending: THREE.AdditiveBlending
+  });
+}
+
+/* --- 树体粒子 ------------------------------------------------------ */
+function buildTree() {
+  const N = 9000;
+  const pos   = new Float32Array(N * 3);
+  const col   = new Float32Array(N * 3);
+  const size  = new Float32Array(N);
+  const phase = new Float32Array(N);
+
+  const cLow = new THREE.Color('#14b884');
+  const cMid = new THREE.Color('#3bf7ad');
+  const cTop = new THREE.Color('#d6ff96');
+  const tmp  = new THREE.Color();
+
+  const TURNS = 7;
+
+  for (let i = 0; i < N; i++) {
+    const u = i / N;
+    // 底部密度更高：表面积随半径增大
+    const h = 1 - Math.sqrt(1 - u);
+
+    const radius = TREE_R * Math.pow(1 - h, 0.78);
+    const shell  = 0.72 + Math.random() * 0.30;
+    let r = radius * shell;
+
+    // 一部分粒子随机铺满锥面，避免只看得到一条螺旋线
+    const onSpiral = Math.random() < 0.45;
+    if (Math.random() < 0.14) r *= Math.random() * 0.85;
+
+    const theta = onSpiral
+      ? h * TURNS * Math.PI * 2 + (Math.random() - 0.5) * 0.62
+      : Math.random() * Math.PI * 2;
+
+    pos[i * 3]     = Math.cos(theta) * r;
+    pos[i * 3 + 1] = BASE_Y + h * TREE_H;
+    pos[i * 3 + 2] = Math.sin(theta) * r;
+
+    if (h < 0.55) tmp.copy(cLow).lerp(cMid, h / 0.55);
+    else          tmp.copy(cMid).lerp(cTop, (h - 0.55) / 0.45);
+
+    // 少量彩色亮点混进树体
+    const spark = Math.random();
+    if (spark < 0.012) tmp.set(spark < 0.005 ? '#ffd166' : '#66e0ff');
+
+    col[i * 3]     = tmp.r;
+    col[i * 3 + 1] = tmp.g;
+    col[i * 3 + 2] = tmp.b;
+
+    size[i]  = 0.85 + Math.random() * 1.05;
+    phase[i] = Math.random() * Math.PI * 2;
+  }
+
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+  geo.setAttribute('aColor',   new THREE.BufferAttribute(col, 3));
+  geo.setAttribute('aSize',    new THREE.BufferAttribute(size, 1));
+  geo.setAttribute('aPhase',   new THREE.BufferAttribute(phase, 1));
+
+  const mat = makeMaterial(0.6, 1.0);
+  const pts = new THREE.Points(geo, mat);
+  pts.frustumCulled = false;
+  return pts;
+}
+
+/* --- 彩灯 ---------------------------------------------------------- */
+function buildLights() {
+  const N = 240;
+  const pos   = new Float32Array(N * 3);
+  const col   = new Float32Array(N * 3);
+  const size  = new Float32Array(N);
+  const phase = new Float32Array(N);
+
+  const palette = ['#ff3b6b', '#ffd166', '#55d6ff', '#ffffff', '#ff8f3b'];
+  const tmp = new THREE.Color();
+
+  for (let i = 0; i < N; i++) {
+    const h = i / N * 0.97;
+    const radius = TREE_R * Math.pow(1 - h, 0.78) * 1.04;
+    const theta = h * 7 * Math.PI * 2 + (Math.random() - 0.5) * 0.3;
+
+    pos[i * 3]     = Math.cos(theta) * radius;
+    pos[i * 3 + 1] = BASE_Y + h * TREE_H;
+    pos[i * 3 + 2] = Math.sin(theta) * radius;
+
+    tmp.set(palette[(Math.random() * palette.length) | 0]);
+    col[i * 3]     = tmp.r;
+    col[i * 3 + 1] = tmp.g;
+    col[i * 3 + 2] = tmp.b;
+
+    size[i]  = 1.5 + Math.random() * 1.9;
+    phase[i] = Math.random() * Math.PI * 2;
+  }
+
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+  geo.setAttribute('aColor',   new THREE.BufferAttribute(col, 3));
+  geo.setAttribute('aSize',    new THREE.BufferAttribute(size, 1));
+  geo.setAttribute('aPhase',   new THREE.BufferAttribute(phase, 1));
+
+  const pts = new THREE.Points(geo, makeMaterial(0.6, 1.0));
+  pts.frustumCulled = false;
+  return pts;
+}
+
+/* --- 雪花（纯 GPU 下落） -------------------------------------------- */
+function makeSnowTexture() {
+  const S = 128;
+  const c = document.createElement('canvas');
+  c.width = c.height = S;
+  const ctx = c.getContext('2d');
+  const cx = S / 2;
+
+  // 柔和光晕底：让雪花在远处退化成光点而不是硬图标
+  const glow = ctx.createRadialGradient(cx, cx, 0, cx, cx, cx * 0.92);
+  glow.addColorStop(0, 'rgba(255,255,255,0.5)');
+  glow.addColorStop(0.32, 'rgba(238,248,255,0.16)');
+  glow.addColorStop(1, 'rgba(220,240,255,0)');
+  ctx.fillStyle = glow;
+  ctx.fillRect(0, 0, S, S);
+
+  ctx.save();
+  ctx.translate(cx, cx);
+  ctx.filter = 'blur(1.5px)';
+  ctx.strokeStyle = 'rgba(255,255,255,0.92)';
+  ctx.lineCap = 'round';
+
+  for (let i = 0; i < 6; i++) {
+    ctx.save();
+    ctx.rotate((i * Math.PI) / 3);
+
+    ctx.lineWidth = 5;
+    ctx.beginPath();
+    ctx.moveTo(0, 0);
+    ctx.lineTo(0, -cx * 0.82);
+    ctx.stroke();
+
+    ctx.lineWidth = 3.2;
+    for (const t of [0.42, 0.68]) {
+      const y = -cx * 0.82 * t;
+      const len = cx * 0.22 * (1.05 - t * 0.55);
+      ctx.beginPath();
+      ctx.moveTo(0, y);
+      ctx.lineTo(len, y - len * 0.85);
+      ctx.moveTo(0, y);
+      ctx.lineTo(-len, y - len * 0.85);
+      ctx.stroke();
+    }
+    ctx.restore();
+  }
+  ctx.restore();
+
+  const tex = new THREE.CanvasTexture(c);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  return tex;
+}
+
+function buildSnow() {
+  const N = 2200;
+  const pos   = new Float32Array(N * 3);
+  const size  = new Float32Array(N);
+  const phase = new Float32Array(N);
+  const col   = new Float32Array(N * 3);
+
+  for (let i = 0; i < N; i++) {
+    pos[i * 3]     = (Math.random() - 0.5) * 23;
+    pos[i * 3 + 1] = Math.random() * 13;
+    pos[i * 3 + 2] = (Math.random() - 0.5) * 17 - 1;
+
+    const tint = 0.88 + Math.random() * 0.12;
+    col[i * 3]     = tint * 0.88;
+    col[i * 3 + 1] = tint * 0.95;
+    col[i * 3 + 2] = tint;
+
+    // 三层纵深：多数是远景细雪，少数是落在镜头前的大片
+    const r = Math.random();
+    size[i] = r < 0.63 ? 0.8 + Math.random() * 0.6
+            : r < 0.91 ? 1.5 + Math.random() * 0.8
+            : 2.2 + Math.random() * 1.1;
+
+    phase[i] = Math.random();
+  }
+
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+  geo.setAttribute('aColor',   new THREE.BufferAttribute(col, 3));
+  geo.setAttribute('aSize',    new THREE.BufferAttribute(size, 1));
+  geo.setAttribute('aPhase',   new THREE.BufferAttribute(phase, 1));
+
+  const mat = new THREE.ShaderMaterial({
+    uniforms: {
+      uTime: { value: 0 },
+      uSpeed: { value: 1.0 },
+      uWind: { value: 0 },
+      uMap: { value: makeSnowTexture() },
+      uPixelRatio: { value: PR }
+    },
+    vertexShader: /* glsl */`
+      uniform float uTime;
+      uniform float uSpeed;
+      uniform float uWind;
+      uniform float uPixelRatio;
+      attribute float aSize;
+      attribute float aPhase;
+      attribute vec3  aColor;
+      varying vec3  vColor;
+      varying float vFade;
+      varying float vRot;
+      void main() {
+        vec3 p = position;
+        // 统一下落速度：所有雪花一样快，不再按 aPhase 分快慢
+        float spd = uSpeed;
+        p.y = mod(p.y - uTime * spd, 13.0) - 3.4;
+
+        // 轻微横摆 + 挥手带起的微风
+        p.x += sin(uTime * 0.5 + aPhase * 21.0) * 0.22;
+        p.x += uWind * (0.6 + aPhase * 0.9);
+        p.x = mod(p.x + 12.0, 24.0) - 12.0;
+        p.z += cos(uTime * 0.43 + aPhase * 17.0) * 0.5;
+
+        vec4 mv = modelViewMatrix * vec4(p, 1.0);
+        gl_Position = projectionMatrix * mv;
+        gl_PointSize = clamp(aSize * (58.0 / max(-mv.z, 0.001)) * uPixelRatio, 1.5, 24.0 * uPixelRatio);
+
+        float edge = smoothstep(-3.4, -1.8, p.y) * smoothstep(9.6, 7.6, p.y);
+        vFade = edge;
+        vColor = aColor;
+        vRot = uTime * (0.25 + aPhase * 0.85) + aPhase * 6.2831;
+      }
+    `,
+    fragmentShader: /* glsl */`
+      uniform sampler2D uMap;
+      varying vec3  vColor;
+      varying float vFade;
+      varying float vRot;
+      void main() {
+        float s = sin(vRot), c = cos(vRot);
+        vec2 uv = mat2(c, -s, s, c) * (gl_PointCoord - 0.5) + 0.5;
+        float a = texture2D(uMap, uv).a * vFade;
+        if (a < 0.02) discard;
+        gl_FragColor = vec4(vColor * a * 0.72, 1.0);
+      }
+    `,
+    transparent: true,
+    depthTest: false,
+    depthWrite: false,
+    blending: THREE.AdditiveBlending
+  });
+
+  const pts = new THREE.Points(geo, mat);
+  pts.frustumCulled = false;
+  return pts;
+}
+
+/* --- 顶星 ---------------------------------------------------------- */
+function makeStarTexture() {
+  const S = 256;
+  const c = document.createElement('canvas');
+  c.width = c.height = S;
+  const ctx = c.getContext('2d');
+  const cx = S / 2;
+
+  const g = ctx.createRadialGradient(cx, cx, 0, cx, cx, cx);
+  g.addColorStop(0, 'rgba(255,255,255,1)');
+  g.addColorStop(0.12, 'rgba(255,244,206,0.85)');
+  g.addColorStop(0.34, 'rgba(255,206,120,0.22)');
+  g.addColorStop(1, 'rgba(255,190,90,0)');
+  ctx.fillStyle = g;
+  ctx.fillRect(0, 0, S, S);
+
+  ctx.globalCompositeOperation = 'lighter';
+  for (let i = 0; i < 4; i++) {
+    ctx.save();
+    ctx.translate(cx, cx);
+    ctx.rotate((i * Math.PI) / 4);
+    const lg = ctx.createLinearGradient(-cx, 0, cx, 0);
+    lg.addColorStop(0, 'rgba(255,230,170,0)');
+    lg.addColorStop(0.5, 'rgba(255,248,220,0.55)');
+    lg.addColorStop(1, 'rgba(255,230,170,0)');
+    ctx.fillStyle = lg;
+    ctx.beginPath();
+    ctx.moveTo(-cx, 0); ctx.lineTo(0, -S * 0.012);
+    ctx.lineTo(cx, 0);  ctx.lineTo(0, S * 0.012);
+    ctx.closePath(); ctx.fill();
+    ctx.restore();
+  }
+
+  const tex = new THREE.CanvasTexture(c);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  return tex;
+}
+
+function buildStar() {
+  const tex = makeStarTexture();
+  const mat = new THREE.SpriteMaterial({
+    map: tex,
+    transparent: true,
+    depthTest: false,
+    depthWrite: false,
+    blending: THREE.AdditiveBlending
+  });
+  const sp = new THREE.Sprite(mat);
+  sp.position.set(0, TOP_Y + 0.30, 0);
+  sp.scale.setScalar(2.6);
+  return sp;
+}
+
+/* --- 地面光晕 ------------------------------------------------------ */
+function buildFloorGlow() {
+  const tex = makeStarTexture();
+  const geo = new THREE.PlaneGeometry(9, 9);
+  const mat = new THREE.MeshBasicMaterial({
+    map: tex,
+    transparent: true,
+    depthTest: false,
+    depthWrite: false,
+    opacity: 0.22,
+    blending: THREE.AdditiveBlending,
+    color: 0x1a7f66
+  });
+  const m = new THREE.Mesh(geo, mat);
+  m.rotation.x = -Math.PI / 2;
+  m.position.set(0, BASE_Y - 0.06, 0);
+  return m;
+}
+
+const treePts  = buildTree();
+const lightPts = buildLights();
+const starSpr  = buildStar();
+const floorGlow = buildFloorGlow();
+const snowPts  = buildSnow();
+
+treeGroup.add(treePts, lightPts, starSpr, floorGlow);
+scene.add(snowPts);
+
+/* ------------------------------------------------------------------ *
+ *  2. 手势状态
+ * ------------------------------------------------------------------ */
+const raw = { open: 0.6, pinch: 0.2, cx: 0.5, cy: 0.5, two: 0 };
+const G   = { open: 0.6, pinch: 0.2, cx: 0.5, cy: 0.5, two: 0, present: false, hands: 0 };
+const SMOOTH = 0.15;
+
+let lastSeen = 0;
+
+// 捏合抓取 → 左右拖动旋转；松手保留甩出的惯性
+let prevCx = null;
+let prevCxT = 0;
+let spinVel = 0;
+let rotRate = 0;
+let lastManual = -99999;
+
+let grabbing = false;
+let grabBaseRot = 0;
+let grabTravel = 0;
+let grabTargetRot = 0;
+let grabVel = 0;
+
+const AUTO_DELAY = 1000;
+const GRAB_ON = 0.78;          // 捏合超过此值算"抓住"
+const GRAB_OFF = 0.55;         // 低于此值算"松手"（迟滞防抖）
+const ROT_PER_SCREEN = Math.PI * 2;   // 手横扫一个画面宽度 = 树转一圈
+
+/* ------------------------------------------------------------------ *
+ *  3. 手势识别
+ * ------------------------------------------------------------------ */
+const video   = document.getElementById('video');
+const overlay = document.getElementById('overlay');
+const camBox  = document.getElementById('camWrap');
+const camLabel = document.getElementById('camLabel');
+const camHint  = document.getElementById('camHint');
+const spinDot  = document.getElementById('spinDot');
+const statusEl = document.getElementById('status');
+const octx = overlay.getContext('2d');
+
+const handLayer = document.getElementById('handLayer');
+const hctx = handLayer.getContext('2d');
+let stageAlpha = 0;
+
+function sizeHandLayer() {
+  const dpr = Math.min(window.devicePixelRatio, 2);
+  handLayer.width  = window.innerWidth * dpr;
+  handLayer.height = window.innerHeight * dpr;
+  hctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+}
+sizeHandLayer();
+
+const CONNECTIONS = [
+  [0,1],[1,2],[2,3],[3,4],
+  [0,5],[5,6],[6,7],[7,8],
+  [5,9],[9,10],[10,11],[11,12],
+  [9,13],[13,14],[14,15],[15,16],
+  [13,17],[17,18],[18,19],[19,20],
+  [0,17]
+];
+
+const d2 = (p, q) => Math.hypot(p.x - q.x, p.y - q.y);
+
+function analyzeHand(lm) {
+  const wrist = lm[0];
+  const midMcp = lm[9];
+  const palm = Math.max(d2(wrist, midMcp), 1e-4);
+
+  // 五指张开度：指尖到腕距离 / 掌宽，与手的朝向无关
+  let sum = 0;
+  for (const t of [8, 12, 16, 20]) sum += d2(lm[t], wrist) / palm;
+  const avg = sum / 4;
+  const open = clamp((avg - 1.05) / (1.95 - 1.05), 0, 1);
+
+  // 拇指 - 食指捏合
+  const pinchD = d2(lm[4], lm[8]) / palm;
+  const pinch = 1 - clamp((pinchD - 0.28) / (1.05 - 0.28), 0, 1);
+
+  return {
+    open, pinch,
+    cx: 1 - (wrist.x + midMcp.x) / 2,
+    cy: (wrist.y + midMcp.y) / 2,
+    px: lm[9].x, py: lm[9].y
+  };
+}
+
+let handLandmarker = null;
+let detectTimer = 0;
+let lastVideoTime = -1;
+
+async function initHand() {
+  if (!HandLandmarker) {
+    const mod = await import('./vendor/vision_bundle.mjs');
+    FilesetResolver = mod.FilesetResolver;
+    HandLandmarker = mod.HandLandmarker;
+  }
+  const fileset = await FilesetResolver.forVisionTasks('./vendor/wasm');
+  const opts = {
+    baseOptions: {
+      modelAssetPath: './models/hand_landmarker.task',
+      delegate: 'GPU'
+    },
+    runningMode: 'VIDEO',
+    numHands: 2,
+    minHandDetectionConfidence: 0.55,
+    minHandPresenceConfidence: 0.55,
+    minTrackingConfidence: 0.55
+  };
+  try {
+    handLandmarker = await HandLandmarker.createFromOptions(fileset, opts);
+  } catch (e) {
+    opts.baseOptions.delegate = 'CPU';
+    handLandmarker = await HandLandmarker.createFromOptions(fileset, opts);
+  }
+}
+
+async function initCamera() {
+  // 用户不回应授权弹窗时 getUserMedia 会一直挂起，加超时兜底
+  const stream = await Promise.race([
+    navigator.mediaDevices.getUserMedia({
+      video: { width: 640, height: 480, facingMode: 'user' }
+    }),
+    new Promise((_, reject) =>
+      setTimeout(() => reject(new Error('camera request timeout')), 8000)
+    )
+  ]);
+  video.srcObject = stream;
+  await video.play();
+  camBox.classList.add('on');
+  statusEl.textContent = '把手举到镜头前 · 已就绪';
+}
+
+function drawOverlay(landmarks) {
+  const W = overlay.width, H = overlay.height;
+  octx.clearRect(0, 0, W, H);
+
+  // 画面中线：帮助判断手在左半还是右半
+  octx.strokeStyle = 'rgba(120, 200, 255, 0.16)';
+  octx.lineWidth = 1.5;
+  octx.setLineDash([10, 10]);
+  octx.beginPath();
+  octx.moveTo(W / 2, 0);
+  octx.lineTo(W / 2, H);
+  octx.stroke();
+  octx.setLineDash([]);
+
+  if (!landmarks || !landmarks.length) return;
+
+  for (const lm of landmarks) {
+    octx.lineWidth = 3;
+    octx.lineCap = 'round';
+    octx.strokeStyle = 'rgba(64, 235, 180, 0.3)';
+    octx.beginPath();
+    for (const [a, b] of CONNECTIONS) {
+      octx.moveTo(lm[a].x * W, lm[a].y * H);
+      octx.lineTo(lm[b].x * W, lm[b].y * H);
+    }
+    octx.stroke();
+
+    octx.fillStyle = 'rgba(190, 255, 235, 0.5)';
+    for (const p of lm) {
+      octx.beginPath();
+      octx.arc(p.x * W, p.y * H, 3.2, 0, Math.PI * 2);
+      octx.fill();
+    }
+
+    // 五个指尖高亮
+    for (const t of [4, 8, 12, 16, 20]) {
+      const p = lm[t];
+      octx.beginPath();
+      octx.arc(p.x * W, p.y * H, 10, 0, Math.PI * 2);
+      octx.fillStyle = 'rgba(255, 206, 100, 0.14)';
+      octx.fill();
+      octx.beginPath();
+      octx.arc(p.x * W, p.y * H, 4.2, 0, Math.PI * 2);
+      octx.fillStyle = 'rgba(255, 226, 150, 0.6)';
+      octx.fill();
+    }
+  }
+}
+
+/**
+ * 把 21 个关键点按「摄像头画面 cover 铺满窗口」的方式映射到整屏，
+ * 叠在圣诞树上方绘制。x 取 1-x 以对齐镜像视图。
+ */
+function drawHandOnStage(landmarks) {
+  const W = window.innerWidth;
+  const H = window.innerHeight;
+  hctx.clearRect(0, 0, W, H);
+
+  if (!landmarks || landmarks.length === 0) {
+    stageAlpha = 0;
+    return;
+  }
+
+  stageAlpha += (0.9 - stageAlpha) * 0.18;
+  hctx.globalAlpha = stageAlpha;
+  hctx.globalCompositeOperation = 'lighter';
+
+  const vw = video.videoWidth || 640;
+  const vh = video.videoHeight || 480;
+  const sc = Math.max(W / vw, H / vh);
+  const dw = vw * sc;
+  const dh = vh * sc;
+  const ox = (W - dw) / 2;
+  const oy = (H - dh) / 2;
+  const toScreen = (p) => [ox + (1 - p.x) * dw, oy + p.y * dh];
+  const SHRINK = 0.6;
+
+  hctx.lineCap = 'round';
+  hctx.lineJoin = 'round';
+
+  for (const lm of landmarks) {
+    // 以掌心为中心等比收缩，手掌位置仍然对应手的真实位置
+    const c0 = toScreen(lm[9]);
+    const pts = lm.map((p) => {
+      const s = toScreen(p);
+      return [c0[0] + (s[0] - c0[0]) * SHRINK, c0[1] + (s[1] - c0[1]) * SHRINK];
+    });
+
+    // 外层柔光
+    hctx.strokeStyle = 'rgba(60, 240, 180, 0.14)';
+    hctx.lineWidth = 8;
+    hctx.beginPath();
+    for (const [a, b] of CONNECTIONS) {
+      hctx.moveTo(pts[a][0], pts[a][1]);
+      hctx.lineTo(pts[b][0], pts[b][1]);
+    }
+    hctx.stroke();
+
+    // 主线
+    hctx.strokeStyle = 'rgba(130, 255, 210, 0.7)';
+    hctx.lineWidth = 2;
+    hctx.stroke();
+
+    // 关节点
+    hctx.fillStyle = 'rgba(220, 255, 242, 0.85)';
+    for (const p of pts) {
+      hctx.beginPath();
+      hctx.arc(p[0], p[1], 2.8, 0, 6.2832);
+      hctx.fill();
+    }
+
+    // 指尖光点
+    for (const i of [4, 8, 12, 16, 20]) {
+      const p = pts[i];
+      hctx.beginPath();
+      hctx.arc(p[0], p[1], 10, 0, 6.2832);
+      hctx.fillStyle = 'rgba(255, 200, 90, 0.13)';
+      hctx.fill();
+      hctx.beginPath();
+      hctx.arc(p[0], p[1], 3.6, 0, 6.2832);
+      hctx.fillStyle = 'rgba(255, 230, 155, 0.95)';
+      hctx.fill();
+    }
+
+    // 掌心准星（抓住时变金色，提示可以拖动）
+    const c = pts[9];
+    hctx.strokeStyle = grabbing
+      ? 'rgba(255, 214, 120, 0.9)'
+      : 'rgba(130, 255, 210, 0.42)';
+    hctx.lineWidth = grabbing ? 2 : 1.3;
+    hctx.beginPath();
+    hctx.arc(c[0], c[1], grabbing ? 21 : 17, 0, 6.2832);
+    hctx.stroke();
+    hctx.beginPath();
+    hctx.moveTo(c[0] - 23, c[1]); hctx.lineTo(c[0] - 8, c[1]);
+    hctx.moveTo(c[0] + 8, c[1]); hctx.lineTo(c[0] + 23, c[1]);
+    hctx.moveTo(c[0], c[1] - 23); hctx.lineTo(c[0], c[1] - 8);
+    hctx.moveTo(c[0], c[1] + 8); hctx.lineTo(c[0], c[1] + 23);
+    hctx.stroke();
+  }
+
+  hctx.globalAlpha = 1;
+  hctx.globalCompositeOperation = 'source-over';
+}
+
+function onResults(res) {
+  const lms = res.landmarks || [];
+  drawOverlay(lms);
+  drawHandOnStage(lms);
+
+  if (lms.length === 0) {
+    prevCx = null;
+    grabbing = false;
+    if (camLabel.textContent !== 'HAND TRACKING · 无') {
+      camLabel.textContent = 'HAND TRACKING · 无';
+      camHint.textContent = '—';
+    }
+    return;
+  }
+
+  // 优先用右手；没有右手就退回检测到的第一只
+  const hs = res.handednesses || res.handedness || [];
+  let hi = 0;
+  for (let i = 0; i < lms.length; i++) {
+    const tag = hs[i] && hs[i][0] ? hs[i][0].categoryName : '';
+    if (tag === 'Right') { hi = i; break; }
+  }
+
+  const a = analyzeHand(lms[hi]);
+  raw.open  = a.open;
+  raw.pinch = a.pinch;
+  raw.cx    = a.cx;
+  raw.cy    = a.cy;
+
+  const otherLm = lms.length >= 2 ? lms[hi === 0 ? 1 : 0] : null;
+  if (otherLm) {
+    const sep = d2(lms[hi][9], otherLm[9]);
+    raw.two = clamp((sep - 0.22) / (0.62 - 0.22), 0, 1);
+    raw.open = (raw.open + analyzeHand(otherLm).open) / 2;
+    G.hands = 2;
+  } else {
+    raw.two = 0;
+    G.hands = 1;
+  }
+
+  const now = performance.now();
+  const dts = prevCx === null ? 0 : (now - prevCxT) / 1000;
+  const dcx = prevCx === null ? 0 : raw.cx - prevCx;
+
+  // 捏合抓取：迟滞判断，抓住后把手的水平位移换算成旋转角
+  if (!grabbing && a.pinch > GRAB_ON) {
+    grabbing = true;
+    grabBaseRot = treeGroup.rotation.y;
+    grabTravel = 0;
+    grabTargetRot = grabBaseRot;
+    grabVel = 0;
+  } else if (grabbing && a.pinch < GRAB_OFF) {
+    grabbing = false;
+    spinVel = grabVel;
+  }
+
+  if (grabbing) {
+    grabTravel += dcx;
+    grabTargetRot = grabBaseRot + grabTravel * ROT_PER_SCREEN;
+    if (dts > 0.001 && dts < 0.4) {
+      grabVel = clamp((dcx / dts) * ROT_PER_SCREEN, -5, 5);
+    } else {
+      grabVel *= 0.5;
+    }
+  }
+
+  prevCx = raw.cx;
+  prevCxT = now;
+
+  const label = 'HAND TRACKING · ' + lms.length;
+  if (camLabel.textContent !== label) camLabel.textContent = label;
+
+  const hint = grabbing ? '捏合中 · 拖动旋转' : '捏合后拖动';
+  if (camHint.textContent !== hint) camHint.textContent = hint;
+
+  if (!demo) {
+    statusEl.textContent = grabbing
+      ? '已抓住 · 左右拖动旋转'
+      : (G.hands === 2 ? '已识别 2 只手' : '捏合拇指与食指后拖动');
+  }
+
+  G.present = true;
+  lastSeen = now;
+}
+
+/* ------------------------------------------------------------------ *
+ *  4. 交互降级：鼠标拖拽
+ * ------------------------------------------------------------------ */
+let dragging = false, dragX = 0, dragY = 0;
+let mouseRot = 0, mouseLift = 0;
+
+canvas.addEventListener('pointerdown', e => {
+  dragging = true; dragX = e.clientX; dragY = e.clientY;
+  canvas.style.cursor = 'grabbing';
+});
+window.addEventListener('pointerup', () => {
+  dragging = false; canvas.style.cursor = 'grab';
+});
+window.addEventListener('pointermove', e => {
+  if (!dragging) return;
+  mouseRot  += (e.clientX - dragX) * 0.006;
+  mouseLift = clamp(mouseLift + (e.clientY - dragY) * 0.004, -1.4, 1.4);
+  dragX = e.clientX; dragY = e.clientY;
+  lastManual = performance.now();
+});
+canvas.style.cursor = 'grab';
+
+window.addEventListener('keydown', e => {
+  if (e.key === 'h' || e.key === 'H') document.body.classList.toggle('clean');
+  if (e.key === 'd' || e.key === 'D') {
+    demo = !demo;
+    statusEl.textContent = demo ? '演示模式 · 虚拟手势' : '等待手势…';
+  }
+});
+
+let demo = new URLSearchParams(location.search).has('demo');
+
+/* ------------------------------------------------------------------ *
+ *  5. 主循环
+ * ------------------------------------------------------------------ */
+const clock = new THREE.Clock();
+let autoRot = 0;
+let autoLift = 0;
+
+function tick() {
+  const dt = Math.min(clock.getDelta(), 0.05);
+  const t  = clock.elapsedTime;
+
+  // ---- 演示模式：虚拟手势驱动
+  if (demo) {
+    raw.open  = 0.5 + 0.42 * Math.sin(t * 0.85);
+    raw.pinch = 0.5 + 0.46 * Math.sin(t * 1.15);
+    raw.cx    = 0.5 + 0.38 * Math.sin(t * 1.35);
+    raw.cy    = 0.5 + 0.16 * Math.sin(t * 0.65 + 2.0);
+    raw.two   = 0.35 + 0.35 * Math.sin(t * 0.3);
+
+    // 虚拟手同样走捏合抓取：捏住时左右拖动，松开后甩出惯性
+    const dcx = prevCx === null ? 0 : raw.cx - prevCx;
+
+    if (!grabbing && raw.pinch > GRAB_ON) {
+      grabbing = true;
+      grabBaseRot = treeGroup.rotation.y;
+      grabTravel = 0;
+      grabTargetRot = grabBaseRot;
+      grabVel = 0;
+    } else if (grabbing && raw.pinch < GRAB_OFF) {
+      grabbing = false;
+      spinVel = grabVel;
+    }
+
+    if (grabbing) {
+      grabTravel += dcx;
+      grabTargetRot = grabBaseRot + grabTravel * ROT_PER_SCREEN;
+      grabVel = clamp((dcx / Math.max(dt, 0.001)) * ROT_PER_SCREEN, -5, 5);
+    }
+
+    prevCx = raw.cx;
+    prevCxT = performance.now();
+
+    G.present = true;
+    lastSeen = performance.now();
+    if (statusEl.textContent !== '演示模式 · 虚拟手势') {
+      statusEl.textContent = '演示模式 · 虚拟手势';
+    }
+  }
+
+  // ---- 无手状态：呼吸动画 + 自动旋转
+  if (G.present && performance.now() - lastSeen > 420) {
+    G.present = false;
+    G.hands = 0;
+    grabbing = false;
+    prevCx = null;
+    statusEl.textContent = '等待手势…（可用鼠标拖拽）';
+  }
+  if (!G.present) {
+    raw.open  = 0.58 + Math.sin(t * 0.75) * 0.20;
+    raw.pinch = 0.30 + Math.sin(t * 1.55) * 0.28;
+    raw.cx = 0.5; raw.cy = 0.5; raw.two = 0;
+    autoRot += dt * 0.22;
+  }
+
+  // ---- 平滑 + 死区
+  for (const k of ['open', 'pinch', 'cx', 'cy', 'two']) {
+    const d = raw[k] - G[k];
+    if (Math.abs(d) > 0.0035) G[k] += d * SMOOTH;
+  }
+
+  // ---- 姿态
+  const nowMs = performance.now();
+  const targetLift = (G.present ? (0.5 - G.cy) * 1.9 : 0) + mouseLift;
+  const prevRotY = treeGroup.rotation.y;
+
+  if (grabbing) {
+    // 抓住拖动：平滑跟随目标角，不叠加惯性
+    treeGroup.rotation.y += (grabTargetRot - treeGroup.rotation.y) * 0.35 + mouseRot;
+    spinVel = 0;
+    lastManual = nowMs;
+  } else {
+    // 松手后靠惯性滑行（衰减按 dt 归一，帧率无关）
+    spinVel *= Math.pow(0.94, dt * 60);
+    treeGroup.rotation.y += spinVel * dt + mouseRot;
+  }
+  mouseRot = 0;
+
+  // 实际转速：拖动时也成立，供扭转 / 侧倾 / 彩灯共用
+  const instantRate = (treeGroup.rotation.y - prevRotY) / Math.max(dt, 0.001);
+  rotRate += (instantRate - rotRate) * 0.3;
+
+  // 甩得越猛，树身向运动反方向侧倾一点（离心感）
+  const tiltTarget = clamp(-rotRate * 0.035, -0.18, 0.18);
+  treeGroup.rotation.z += (tiltTarget - treeGroup.rotation.z) * 0.07;
+
+  // 手动旋转结束后静置 1 秒，再恢复自动旋转
+  if (nowMs - lastManual > AUTO_DELAY) {
+    autoRot += dt * 0.22;
+    let diff = autoRot - treeGroup.rotation.y;
+    diff = ((diff + Math.PI) % (Math.PI * 2) + Math.PI * 2) % (Math.PI * 2) - Math.PI;
+    treeGroup.rotation.y += diff * 0.06;
+  } else {
+    // 静置期间让基准角跟随实际角，恢复自转时不会跳变
+    autoRot = treeGroup.rotation.y;
+  }
+
+  camera.position.y = lerp(camera.position.y, 0.85 + targetLift, 0.055);
+  const targetZ = 8.9 - G.two * 2.8;
+  camera.position.z = lerp(camera.position.z, targetZ, 0.045);
+  camera.lookAt(0, 0.1, 0);
+
+  // ---- 参数下发
+  const open = G.open;
+  const bright = 0.95;
+
+  const spinAbs = Math.abs(rotRate);
+  const twist = clamp(-rotRate * 0.10, -0.55, 0.55);
+
+  treePts.material.uniforms.uTime.value   = t;
+  treePts.material.uniforms.uOpen.value   = open;
+  treePts.material.uniforms.uBright.value = bright * 0.92 + spinAbs * 0.04;
+  treePts.material.uniforms.uTwist.value  = twist;
+
+  lightPts.material.uniforms.uTime.value   = t * (1.0 + open * 0.9 + spinAbs * 0.25);
+  lightPts.material.uniforms.uOpen.value   = open;
+  lightPts.material.uniforms.uBright.value = 0.85 + open * 0.45 + spinAbs * 0.12;
+  lightPts.material.uniforms.uTwist.value  = twist;
+
+  snowPts.material.uniforms.uTime.value  = t;
+  snowPts.material.uniforms.uSpeed.value = 1.0;
+  snowPts.material.uniforms.uWind.value  = clamp(rotRate * 0.16, -1.0, 1.0);
+
+  // 顶星随张开度呼吸
+  const starPulse = 1 + Math.sin(t * 1.6) * 0.06 + open * 0.22;
+  starSpr.scale.setScalar(2.6 * starPulse * (1 + spinAbs * 0.025));
+  starSpr.material.opacity = 0.55 + open * 0.45;
+
+  floorGlow.material.opacity = 0.10 + bright * 0.16;
+
+  // ---- 摄像头推理（限频 ~22fps）
+  if (handLandmarker && video.readyState >= 2) {
+    detectTimer += dt;
+    if (detectTimer > 0.045 && video.currentTime !== lastVideoTime) {
+      detectTimer = 0;
+      lastVideoTime = video.currentTime;
+      try {
+        const res = handLandmarker.detectForVideo(video, performance.now());
+        onResults(res);
+      } catch (err) { /* 单帧失败不中断 */ }
+    }
+  }
+
+  // ---- 仪表
+  barOpen.style.width  = (G.open * 100).toFixed(0) + '%';
+  barPinch.style.width = (G.pinch * 100).toFixed(0) + '%';
+  barTwo.style.width   = (G.two * 100).toFixed(0) + '%';
+
+  const sp  = clamp(rotRate / 4.5, -1, 1);
+  const spw = Math.abs(sp) * 44 + 3;
+  spinDot.style.width = spw.toFixed(1) + '%';
+  spinDot.style.left  = (sp >= 0 ? 50 : 50 - spw).toFixed(1) + '%';
+
+  renderer.render(scene, camera);
+
+  if (!bootDone) {
+    bootDone = true;
+    setTimeout(() => {
+      bootEl.classList.add('gone');
+      setTimeout(() => bootEl.remove(), 900);
+    }, 400);
+  }
+}
+
+const barOpen  = document.getElementById('b-open');
+const barPinch = document.getElementById('b-pinch');
+const barTwo   = document.getElementById('b-two');
+const bootEl   = document.getElementById('boot');
+let bootDone   = false;
+
+window.addEventListener('resize', () => {
+  camera.aspect = window.innerWidth / window.innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(window.innerWidth, window.innerHeight);
+  sizeHandLayer();
+});
+
+/* ------------------------------------------------------------------ *
+ *  6. 启动
+ * ------------------------------------------------------------------ */
+renderer.setAnimationLoop(tick);
+
+(async () => {
+  try {
+    await initHand();
+    statusEl.textContent = '手势模型就绪 · 正在请求摄像头…';
+    await initCamera();
+  } catch (e) {
+    console.warn('[init]', e);
+    statusEl.textContent = HandLandmarker
+      ? '摄像头不可用 · 已切换到自动动画'
+      : '手势模块不可用 · 已切换到自动动画';
+    camBox.classList.remove('on');
+  }
+})();
+</script>
+</body>
+</html>

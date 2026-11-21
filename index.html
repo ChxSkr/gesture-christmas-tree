@@ -290,6 +290,10 @@
   <header><span>参数调节</span><button id="tunerClose" aria-label="收起">×</button></header>
   <div class="tuner-body">
     <p class="grp">手势</p>
+    <div class="row" data-key="smooth">
+      <label>手势平滑</label><output></output>
+      <input type="range" min="0" max="1" step="0.05">
+    </div>
     <div class="row" data-key="rotPerScreen">
       <label>旋转灵敏度</label><output></output>
       <input type="range" min="0.4" max="3" step="0.1">
@@ -365,6 +369,56 @@ let HandLandmarker = null;
 
 const clamp = (v, a, b) => (v < a ? a : v > b ? b : v);
 const lerp = (a, b, t) => a + (b - a) * t;
+
+/**
+ * 1€ 滤波器（One Euro Filter）。
+ * 交互输入降噪的标准解法：截止频率随信号速度自适应 ——
+ * 手静止时强平滑（把抖动压掉），手快速移动时放低延迟（跟得住）。
+ * 比固定系数的 EMA 好在不会"要么抖、要么迟钝"二选一。
+ */
+class OneEuro {
+  constructor(minCutoff = 1.4, beta = 0.02, dCutoff = 1.0) {
+    this.minCutoff = minCutoff;
+    this.beta = beta;
+    this.dCutoff = dCutoff;
+    this.xPrev = null;
+    this.dxPrev = 0;
+    this.tPrev = 0;
+  }
+
+  static alpha(cutoff, dt) {
+    const tau = 1 / (2 * Math.PI * cutoff);
+    return 1 / (1 + tau / dt);
+  }
+
+  reset() {
+    this.xPrev = null;
+    this.dxPrev = 0;
+  }
+
+  filter(x, t) {
+    if (this.xPrev === null) {
+      this.xPrev = x;
+      this.tPrev = t;
+      return x;
+    }
+    // t 用 performance.now() 传入，单位是毫秒；公式里的 tau 是秒，必须换算
+    const dt = Math.max((t - this.tPrev) / 1000, 1 / 240);
+    const dx = (x - this.xPrev) / dt;
+
+    const ad = OneEuro.alpha(this.dCutoff, dt);
+    const dxHat = ad * dx + (1 - ad) * this.dxPrev;
+
+    const cutoff = this.minCutoff + this.beta * Math.abs(dxHat);
+    const a = OneEuro.alpha(cutoff, dt);
+    const xHat = a * x + (1 - a) * this.xPrev;
+
+    this.xPrev = xHat;
+    this.dxPrev = dxHat;
+    this.tPrev = t;
+    return xHat;
+  }
+}
 
 /* ------------------------------------------------------------------ *
  *  1. 场景
@@ -837,6 +891,7 @@ let grabVel = 0;
 
 /* ---------------- 可调参数（侧边面板实时生效） ---------------- */
 const DEFAULTS = {
+  smooth: 0.55,         // 手势平滑强度：0 跟手优先，1 稳定优先
   rotPerScreen: 1.0,    // 手横扫一屏 = 树转几圈
   grabOn: 0.78,         // 捏合抓取阈值
   inertia: 0.94,        // 松手惯性（每 1/60 秒的衰减系数）
@@ -859,6 +914,23 @@ try {
 } catch (e) { /* 忽略损坏的本地配置 */ }
 
 const GRAB_HYST = 0.23;   // 抓取/松手的双阈值差
+
+// beta 是"速度自适应"权重：手越快截止频率越高、延迟越低。
+// cx/cy 是归一化坐标（每秒 0.5 已算快速移动），beta 需要比像素坐标系大得多。
+const fCx    = new OneEuro(1.5, 2.5);
+const fCy    = new OneEuro(1.1, 1.4);
+const fOpen  = new OneEuro(1.3, 0.8);
+const fPinch = new OneEuro(2.2, 3.0);
+
+function applySmooth() {
+  // smooth 0 → 截止频率高（跟手，抖动多）；1 → 截止频率低（稳，略迟钝）
+  const c = 3.0 - CONFIG.smooth * 2.5;
+  fCx.minCutoff    = c * 1.05;
+  fCy.minCutoff    = c * 0.75;
+  fOpen.minCutoff  = c * 0.90;
+  fPinch.minCutoff = c * 1.50;
+}
+applySmooth();
 
 /* ------------------------------------------------------------------ *
  *  3. 手势识别
@@ -1126,6 +1198,8 @@ function onResults(res) {
   if (lms.length === 0) {
     prevCx = null;
     grabbing = false;
+    // 手离开画面就重置滤波状态，避免下次入画时从旧值硬拉过来
+    fCx.reset(); fCy.reset(); fOpen.reset(); fPinch.reset();
     if (camLabel.textContent !== 'HAND TRACKING · 无') {
       camLabel.textContent = 'HAND TRACKING · 无';
       camHint.textContent = '—';
@@ -1141,38 +1215,41 @@ function onResults(res) {
     if (tag === 'Right') { hi = i; break; }
   }
 
+  const now = performance.now();
   const a = analyzeHand(lms[hi]);
-  raw.open  = a.open;
-  raw.pinch = a.pinch;
-  raw.cx    = a.cx;
-  raw.cy    = a.cy;
+
+  // 1€ 滤波：手静止时强平滑压掉关键点抖动，快速移动时自动放低延迟
+  raw.open  = fOpen.filter(a.open, now);
+  raw.pinch = fPinch.filter(a.pinch, now);
+  raw.cx    = fCx.filter(a.cx, now);
+  raw.cy    = fCy.filter(a.cy, now);
 
   const otherLm = lms.length >= 2 ? lms[hi === 0 ? 1 : 0] : null;
   if (otherLm) {
     const sep = d2(lms[hi][9], otherLm[9]);
     raw.two = clamp((sep - 0.22) / (0.62 - 0.22), 0, 1);
-    raw.open = (raw.open + analyzeHand(otherLm).open) / 2;
     G.hands = 2;
   } else {
     raw.two = 0;
     G.hands = 1;
   }
 
-  const now = performance.now();
   const dts = prevCx === null ? 0 : (now - prevCxT) / 1000;
-  const dcx = prevCx === null ? 0 : raw.cx - prevCx;
+  const dcxRaw = prevCx === null ? 0 : raw.cx - prevCx;
+  // 微小位移直接丢弃：rotK 会把 0.001 的手抖放大成 0.36° 的转动，肉眼可见
+  const dcx = Math.abs(dcxRaw) < 0.0012 ? 0 : dcxRaw;
 
   // 捏合抓取：迟滞判断，抓住后把手的水平位移换算成旋转角
   const rotK = CONFIG.rotPerScreen * Math.PI;
   const grabOff = CONFIG.grabOn - GRAB_HYST;
 
-  if (!grabbing && a.pinch > CONFIG.grabOn) {
+  if (!grabbing && raw.pinch > CONFIG.grabOn) {
     grabbing = true;
     grabBaseRot = treeGroup.rotation.y;
     grabTravel = 0;
     grabTargetRot = grabBaseRot;
     grabVel = 0;
-  } else if (grabbing && a.pinch < grabOff) {
+  } else if (grabbing && raw.pinch < grabOff) {
     grabbing = false;
     spinVel = grabVel;
   }
@@ -1526,6 +1603,7 @@ const tunerEl = document.getElementById('tuner');
 const gearEl  = document.getElementById('gear');
 
 const FMT = {
+  smooth:        v => (v < 0.34 ? '跟手' : v < 0.67 ? '均衡' : '稳'),
   rotPerScreen: v => v.toFixed(1) + ' 圈',
   grabOn:       v => v.toFixed(2),
   inertia:      v => Math.round(v * 100) + '%',
@@ -1564,6 +1642,7 @@ tunerEl.querySelectorAll('.row').forEach((row) => {
     CONFIG[k] = parseFloat(input.value);
     out.textContent = FMT[k](CONFIG[k]);
     if (k === 'treeCount' || k === 'snowCount') applyCounts();
+    if (k === 'smooth') applySmooth();
     saveConfig();
   });
 });

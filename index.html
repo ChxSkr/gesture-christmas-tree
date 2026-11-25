@@ -451,6 +451,7 @@ const particleVert = /* glsl */`
   uniform float uBright;
   uniform float uPixelRatio;
   uniform float uTwist;
+  uniform float uIntro;
   attribute float aSize;
   attribute float aPhase;
   attribute float aAngle;
@@ -502,11 +503,27 @@ const particleVert = /* glsl */`
     float tc = cos(tw), ts = sin(tw);
     pp.xz = mat2(tc, -ts, ts, tc) * pp.xz;
 
+    // ---- 开场：粒子从远处球壳飞入，途中整体旋进
+    // aPhase 存的是 0~2π 的随机相位，这里用 sin 取 ±5 的纵向散布
+    vec3 startPos = vec3(
+      cos(aAngle * 3.1 + 1.7) * 7.5,
+      sin(aPhase) * 5.0,
+      sin(aAngle * 3.1 + 1.7) * 7.5
+    );
+    pp = mix(startPos, pp, uIntro);
+    float sw = (1.0 - uIntro) * 0.9;
+    float scw = cos(sw), ssw = sin(sw);
+    pp.xz = mat2(scw, -ssw, ssw, scw) * pp.xz;
+
     vec4 mv = modelViewMatrix * vec4(pp, 1.0);
     gl_Position = projectionMatrix * mv;
 
     float twinkle = 0.72 + 0.42 * sin(uTime * 2.1 + aPhase);
-    gl_PointSize = aSize * twinkle * uBright * (62.0 / max(-mv.z, 0.001)) * uPixelRatio;
+    // 上限防止开场时贴近镜头的粒子把点撑到几十像素而渲染成空心环
+    gl_PointSize = min(
+      aSize * twinkle * uBright * (62.0 / max(-mv.z, 0.001)) * uPixelRatio,
+      72.0 * uPixelRatio
+    );
 
     vColor = aColor;
     vGlow  = twinkle * uBright;
@@ -514,6 +531,7 @@ const particleVert = /* glsl */`
 `;
 
 const particleFrag = /* glsl */`
+  uniform float uIntro;
   varying vec3  vColor;
   varying float vGlow;
   void main() {
@@ -521,7 +539,8 @@ const particleFrag = /* glsl */`
     float d = length(uv);
     if (d > 0.5) discard;
     float a = pow(smoothstep(0.5, 0.0, d), 1.6);
-    gl_FragColor = vec4(vColor * vGlow * a * 0.58, 1.0);
+    // 最低保留 35% 亮度：过暗时软件渲染器会把点画成空心环
+    gl_FragColor = vec4(vColor * vGlow * a * 0.58 * (0.35 + 0.65 * uIntro), 1.0);
   }
 `;
 
@@ -532,6 +551,7 @@ function makeMaterial(open = 0.6, bright = 1.0) {
       uOpen:   { value: open },
       uBright: { value: bright },
       uTwist:  { value: 0 },
+      uIntro:  { value: 0 },
       uPixelRatio: { value: PR }
     },
     vertexShader: particleVert,
@@ -918,6 +938,9 @@ let prevCxT = 0;
 let spinVel = 0;
 let rotRate = 0;
 let lastManual = -99999;
+
+let introT = 0;
+const INTRO_DUR = 2.8;
 
 let grabbing = false;
 let grabBaseRot = 0;
@@ -1414,6 +1437,7 @@ function tryPopSnow(sx, sy) {
 window.addEventListener('keydown', e => {
   if (e.key === 'h' || e.key === 'H') document.body.classList.toggle('clean');
   if (e.key === 'p' || e.key === 'P') toggleTuner();
+  if (e.key === 'r' || e.key === 'R') introT = 0;   // 重播开场
   if (e.key === 'd' || e.key === 'D') {
     demo = !demo;
     statusEl.textContent = demo ? '演示模式 · 虚拟手势' : '等待手势…';
@@ -1432,6 +1456,10 @@ let autoLift = 0;
 function tick() {
   const dt = Math.min(clock.getDelta(), 0.05);
   const t  = clock.elapsedTime;
+
+  // ---- 开场推进（0→1，easeOutCubic）
+  if (introT < 1) introT = Math.min(introT + dt / INTRO_DUR, 1);
+  const introEase = 1 - Math.pow(1 - introT, 4);
 
   // ---- 演示模式：虚拟手势驱动
   if (demo) {
@@ -1544,8 +1572,10 @@ function tick() {
     autoRot = treeGroup.rotation.y;
   }
 
-  camera.position.y = lerp(camera.position.y, 0.85 + targetLift, 0.055);
-  const targetZ = 8.9 - G.two * 2.8;
+  // 开场时相机从高处远处推近
+  const camPull = 1 - introEase;
+  camera.position.y = lerp(camera.position.y, 0.85 + targetLift + camPull * 1.5, 0.055);
+  const targetZ = 8.9 - G.two * 2.8 + camPull * 5.2;
   camera.position.z = lerp(camera.position.z, targetZ, 0.045);
   camera.lookAt(0, 0.1, 0);
 
@@ -1560,14 +1590,23 @@ function tick() {
   treePts.material.uniforms.uOpen.value   = open;
   treePts.material.uniforms.uBright.value = bright * 0.92 + spinAbs * 0.04;
   treePts.material.uniforms.uTwist.value  = twist;
+  treePts.material.uniforms.uIntro.value  = introEase;
 
   lightPts.material.uniforms.uTime.value   = t * (1.0 + open * 0.9 + spinAbs * 0.25);
   lightPts.material.uniforms.uOpen.value   = open;
+  lightPts.material.uniforms.uIntro.value  = introEase;
   // 彩灯亮度：旋转加成收敛，并压一个硬上限，避免捏合快转时一片白
   lightPts.material.uniforms.uBright.value = Math.min(
     CONFIG.lightBright + open * 0.32 + spinAbs * 0.035,
     1.25
   );
+
+  // 开场时粒子与雪花逐片出现，避免一上来就满屏
+  if (introT < 1) {
+    const grow = Math.min(introEase * 1.35, 1);
+    treePts.geometry.setDrawRange(0, Math.round(CONFIG.treeCount * grow));
+    snowPts.geometry.setDrawRange(0, Math.round(CONFIG.snowCount * introEase));
+  }
   lightPts.material.uniforms.uTwist.value  = twist;
 
   snowPts.material.uniforms.uTime.value  = t;

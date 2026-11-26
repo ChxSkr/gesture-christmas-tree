@@ -929,8 +929,11 @@ scene.add(snowPts);
 const raw = { open: 0.93, pinch: 0.2, cx: 0.5, cy: 0.5, two: 0 };
 const G   = { open: 0.93, pinch: 0.2, cx: 0.5, cy: 0.5, two: 0, present: false, hands: 0 };
 const SMOOTH = 0.15;
-// 手离开画面后 open 单独用一个更小的系数，让「摊开成环」是个从容的过程
-const OPEN_FADE = 0.02;
+// 手离开后按固定时长摊开成环。用时间曲线而不是指数平滑：
+// 指数平滑前半程就会走掉一大半变化，看着就是"唰一下散了"，后半段拖尾又没意义。
+let fadeT = 1;
+let fadeFrom = 0.93;
+const FADE_DUR = 3.2;
 
 let lastSeen = 0;
 
@@ -1509,26 +1512,31 @@ function tick() {
     G.hands = 0;
     grabbing = false;
     prevCx = null;
+    fadeFrom = G.open;   // 从手离开那一刻的实际形态开始摊开
+    fadeT = 0;
     statusEl.textContent = '等待手势…（可用鼠标拖拽）';
+  } else if (G.present) {
+    fadeT = 1;           // 手在画面里，重置摊开进度
   }
+
   if (!G.present) {
-    // 待机态停在行星环上，缓慢公转；手入画后握拳才会收回成树
-    raw.open  = 0.93 + Math.sin(t * 0.5) * 0.05;
+    // 按固定时长摊开，smoothstep 两端缓中间快，全程 3.2 秒
+    if (fadeT < 1) fadeT = Math.min(fadeT + dt / FADE_DUR, 1);
+    const e = fadeT * fadeT * (3 - 2 * fadeT);
+    const target = 0.93 + Math.sin(t * 0.5) * 0.05;
+    G.open = fadeFrom + (target - fadeFrom) * e;
+
+    raw.open  = G.open;
     raw.pinch = 0.30 + Math.sin(t * 1.55) * 0.28;
     raw.cx = 0.5; raw.cy = 0.5; raw.two = 0;
     // 自转统一交给下方「静置 1 秒后」的分支，避免重复累加成双倍速
   }
 
-  // ---- 平滑 + 死区
-  // 有手时 open 跟手（0.15）；手离开后改用 OPEN_FADE 慢慢摊开，死区也一并收窄
-  const openEase = G.present ? SMOOTH : OPEN_FADE;
-  const openDead = G.present ? 0.0035 : 0.0012;
-
+  // ---- 平滑 + 死区（无手时 open 已由 fadeT 直接驱动，跳过以免二次滞后）
   for (const k of ['open', 'pinch', 'cx', 'cy', 'two']) {
+    if (k === 'open' && !G.present) continue;
     const d = raw[k] - G[k];
-    const ease = (k === 'open') ? openEase : SMOOTH;
-    const dead = (k === 'open') ? openDead : 0.0035;
-    if (Math.abs(d) > dead) G[k] += d * ease;
+    if (Math.abs(d) > 0.0035) G[k] += d * SMOOTH;
   }
 
   // ---- 姿态

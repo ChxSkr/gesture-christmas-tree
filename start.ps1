@@ -51,5 +51,33 @@ Write-Host "  ==================================================" -ForegroundCol
 Write-Host "  Stop: press Ctrl+C in this window" -ForegroundColor DarkGray
 Write-Host ""
 
+# 带 no-store 的静态服务器：默认的 http.server 会让浏览器缓存 index.html，
+# 改完代码刷新看不到效果，很容易误判成"改动无效"
+$serverCode = @"
+import http.server
+import socketserver
+
+PORT = $port
+
+
+class Handler(http.server.SimpleHTTPRequestHandler):
+    def end_headers(self):
+        self.send_header('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0')
+        self.send_header('Pragma', 'no-cache')
+        self.send_header('Expires', '0')
+        super().end_headers()
+
+    def log_message(self, fmt, *args):
+        pass
+
+
+socketserver.TCPServer.allow_reuse_address = True
+with socketserver.TCPServer(('0.0.0.0', PORT), Handler) as httpd:
+    httpd.serve_forever()
+"@
+
+$pyFile = Join-Path $env:TEMP 'gct_dev_server.py'
+[IO.File]::WriteAllText($pyFile, $serverCode, (New-Object Text.UTF8Encoding $false))
+
 Start-Process $localUrl
-python -m http.server $port --bind 0.0.0.0
+python $pyFile

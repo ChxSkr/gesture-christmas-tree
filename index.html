@@ -933,6 +933,7 @@ scene.add(snowPts);
 const raw = { open: 0.93, pinch: 0.2, cx: 0.5, cy: 0.5, two: 0 };
 const G   = { open: 0.93, pinch: 0.2, cx: 0.5, cy: 0.5, two: 0, present: false, hands: 0 };
 const SMOOTH = 0.15;
+const OPEN_EASE = 0.07;   // open 通道专用：跟手但不"啪"地一下完成变化
 // 手离开后按固定时长摊开成环。用时间曲线而不是指数平滑：
 // 指数平滑前半程就会走掉一大半变化，看着就是"唰一下散了"，后半段拖尾又没意义。
 let fadeT = 1;
@@ -1537,10 +1538,13 @@ function tick() {
   }
 
   // ---- 平滑 + 死区（无手时 open 已由 fadeT 直接驱动，跳过以免二次滞后）
+  // open 单独用更柔的系数：握拳/张开是形态级的变化，比"转个角度"值得更从容，
+  // 其余通道（旋转、捏合、双手间距）保持原来的跟手速度
   for (const k of ['open', 'pinch', 'cx', 'cy', 'two']) {
     if (k === 'open' && !G.present) continue;
     const d = raw[k] - G[k];
-    if (Math.abs(d) > 0.0035) G[k] += d * SMOOTH;
+    const ease = (k === 'open') ? OPEN_EASE : SMOOTH;
+    if (Math.abs(d) > 0.0035) G[k] += d * ease;
   }
 
   // ---- 姿态

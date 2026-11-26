@@ -926,9 +926,11 @@ scene.add(snowPts);
 /* ------------------------------------------------------------------ *
  *  2. 手势状态
  * ------------------------------------------------------------------ */
-const raw = { open: 0.6, pinch: 0.2, cx: 0.5, cy: 0.5, two: 0 };
-const G   = { open: 0.6, pinch: 0.2, cx: 0.5, cy: 0.5, two: 0, present: false, hands: 0 };
+const raw = { open: 0.93, pinch: 0.2, cx: 0.5, cy: 0.5, two: 0 };
+const G   = { open: 0.93, pinch: 0.2, cx: 0.5, cy: 0.5, two: 0, present: false, hands: 0 };
 const SMOOTH = 0.15;
+// 手离开画面后 open 单独用一个更小的系数，让「摊开成环」是个从容的过程
+const OPEN_FADE = 0.032;
 
 let lastSeen = 0;
 
@@ -1518,9 +1520,15 @@ function tick() {
   }
 
   // ---- 平滑 + 死区
+  // 有手时 open 跟手（0.15）；手离开后改用 OPEN_FADE 慢慢摊开，死区也一并收窄
+  const openEase = G.present ? SMOOTH : OPEN_FADE;
+  const openDead = G.present ? 0.0035 : 0.0012;
+
   for (const k of ['open', 'pinch', 'cx', 'cy', 'two']) {
     const d = raw[k] - G[k];
-    if (Math.abs(d) > 0.0035) G[k] += d * SMOOTH;
+    const ease = (k === 'open') ? openEase : SMOOTH;
+    const dead = (k === 'open') ? openDead : 0.0035;
+    if (Math.abs(d) > dead) G[k] += d * ease;
   }
 
   // ---- 姿态

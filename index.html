@@ -316,6 +316,10 @@
       <label>恢复自转延迟</label><output></output>
       <input type="range" min="200" max="3000" step="100">
     </div>
+    <div class="row" data-key="fadeDur">
+      <label>散开成环时长</label><output></output>
+      <input type="range" min="1" max="10" step="0.5">
+    </div>
     <div class="row" data-key="twist">
       <label>扭转强度</label><output></output>
       <input type="range" min="0" max="0.3" step="0.01">
@@ -933,7 +937,6 @@ const SMOOTH = 0.15;
 // 指数平滑前半程就会走掉一大半变化，看着就是"唰一下散了"，后半段拖尾又没意义。
 let fadeT = 1;
 let fadeFrom = 0.93;
-const FADE_DUR = 3.2;
 
 let lastSeen = 0;
 
@@ -961,6 +964,7 @@ const DEFAULTS = {
   inertia: 0.94,        // 松手惯性（每 1/60 秒的衰减系数）
   autoSpeed: 0.22,      // 自动旋转角速度 rad/s
   autoDelay: 1000,      // 停手后多久恢复自转 ms
+  fadeDur: 5.0,         // 手离开后摊开成环的时长（秒）
   twist: 0.10,          // 扭转强度
   treeCount: 9000,      // 树体粒子数
   lightBright: 0.85,    // 彩灯亮度基准
@@ -1521,7 +1525,7 @@ function tick() {
 
   if (!G.present) {
     // 按固定时长摊开，smoothstep 两端缓中间快，全程 3.2 秒
-    if (fadeT < 1) fadeT = Math.min(fadeT + dt / FADE_DUR, 1);
+    if (fadeT < 1) fadeT = Math.min(fadeT + dt / Math.max(CONFIG.fadeDur, 0.5), 1);
     const e = fadeT * fadeT * (3 - 2 * fadeT);
     const target = 0.93 + Math.sin(t * 0.5) * 0.05;
     G.open = fadeFrom + (target - fadeFrom) * e;
@@ -1705,6 +1709,7 @@ const FMT = {
   inertia:      v => Math.round(v * 100) + '%',
   autoSpeed:    v => v.toFixed(2),
   autoDelay:    v => (v / 1000).toFixed(1) + ' 秒',
+  fadeDur:      v => v.toFixed(1) + ' 秒',
   twist:        v => v.toFixed(2),
   treeCount:    v => Math.round(v).toLocaleString('en-US'),
   lightBright:  v => v.toFixed(2),
